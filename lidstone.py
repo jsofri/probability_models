@@ -8,7 +8,7 @@ class UnigramLidstoneModel:
     This class represents a unigram lidstone model.
     """
 
-    def __init__(self, constant: float, events: list[str], vocabulary: int) -> None:
+    def __init__(self, constant: float, events: Counter[str], vocabulary: int) -> None:
         """
         Initialize an unigram lidstone model.
         :param constant: The constant of the model.
@@ -17,8 +17,8 @@ class UnigramLidstoneModel:
         """
 
         self.constant: float = constant
-        self.events: Counter[str] = Counter(events)
-        self.len_of_events: int = len(events)
+        self.events: Counter[str] = events
+        self.len_of_events: int = sum(events.values())
         self.vocabulary: int = vocabulary
 
         # Caching the denominator of the lidstone probability for faster calculation.

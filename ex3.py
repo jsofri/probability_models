@@ -7,13 +7,17 @@ import pandas as pd
 import re
 
 EPSILON: float = 1e-6
-LIDSTONE_CONSTANT: float = 0.12
+LIDSTONE_CONSTANT: float = 0.98
 K: int = 10
-THRESHOLD: float = 10.0
+THRESHOLD: float = 1.0
 SECTION_NUM_LINES: int = 4
 
 
 class EM:
+    """
+    This class represents the EM algorithm for clustering.
+    """
+
     def __init__(self, articles: dict[int, list[str]],
                  num_of_clusters: int,
                  num_of_words: int,
@@ -21,6 +25,16 @@ class EM:
                  epsilon: float = EPSILON,
                  k: int = K,
                  lidstone_constant: float = LIDSTONE_CONSTANT) -> None:
+        """
+        Initialize variables.
+        :param articles: articles to cluster.
+        :param num_of_clusters: number of clusters.
+        :param num_of_words: number of words in the articles.
+        :param vocabulary: vocabulary size.
+        :param epsilon: constant for alpha.
+        :param k: constant the e-step.
+        :param lidstone_constant: constant for lidstone model.
+        """
 
         self.articles: dict[int, list[str]] = articles
         self.num_of_articles: int = len(articles)
@@ -34,27 +48,37 @@ class EM:
         self.num_of_words: int = num_of_words
 
         self.p: list[Optional[UnigramLidstoneModel]] = [None] * self.num_of_clusters
-        self.w_t: list[list[float]] = [[] for _ in range(self.num_of_clusters)]
+        self.w_t: list[list[float]] = [[] for _ in range(self.num_of_articles)]
         self.m: list[float] = [0.0] * self.num_of_articles
         self.exp_z: list[list[float]] = [[] for _ in range(self.num_of_articles)]
         self.likelihood: float = 0.0
 
     def initialization(self) -> None:
+        """
+        Initialize the clusters, alpha, w_t and p.
+        :return:
+        """
+
         for article_ord in self.articles.keys():
             self.clusters[article_ord % self.num_of_clusters].append(article_ord)
 
         for article in range(self.num_of_articles):
             for cluster in range(self.num_of_clusters):
                 if article in self.clusters[cluster]:
-                    self.w_t[cluster].append(1.0)
+                    self.w_t[article].append(1.0)
                 else:
-                    self.w_t[cluster].append(0.0)
+                    self.w_t[article].append(0.0)
 
         self.compute_alpha()
         self.normalize_alpha()
         self.compute_p_ik()
 
     def compute_alpha(self) -> None:
+        """
+        Compute the alpha of each cluster.
+        :return:
+        """
+
         for i in range(self.num_of_clusters):
             self.alpha[i] = sum(self.w_t[i]) / self.num_of_articles
 
@@ -62,22 +86,39 @@ class EM:
                 self.alpha[i] = self.epsilon
 
     def normalize_alpha(self) -> None:
+        """
+        Normalize the alpha of each cluster.
+        :return:
+        """
+
         sum_alpha: int = sum(self.alpha.values())
 
         for i in range(self.num_of_clusters):
             self.alpha[i] /= sum_alpha
 
     def compute_p_ik(self) -> None:
-        list_of_words: list[str] = list()
+        """
+        Compute the p_ik of each cluster.
+        :return:
+        """
 
-        for i, cluster in enumerate(self.clusters):
-            for article in cluster:
-                list_of_words += self.articles[article]
+        for i in range(self.num_of_clusters):
+            words_counter: Counter = Counter()
 
-            self.p[i] = UnigramLidstoneModel(self.lidstone_constant, list_of_words, self.vocabulary)
-            list_of_words.clear()
+            for article, article_w_ti in zip(self.articles.values(), self.w_t):
+
+                words_article_counter = Counter(article)
+                for word, word_count in words_article_counter.items():
+                    words_counter[word] += word_count * article_w_ti[i]
+
+            self.p[i] = UnigramLidstoneModel(self.lidstone_constant, words_counter, self.vocabulary)
 
     def e_step(self) -> None:
+        """
+        Perform the e-step of the EM algorithm.
+        :return:
+        """
+
         z: list[float] = [0.0] * self.num_of_clusters
 
         new_clusters: list[list[int]] = [[] for _ in range(self.num_of_clusters)]
@@ -104,7 +145,7 @@ class EM:
                 if z[i] - m < -self.k:
                     w_t[i] = 0.0
                 else:
-                    w_t[i] = exp_z[i] / sum([exp_z[j] for j in  range(self.num_of_clusters) if z[j] - m >= -self.k])
+                    w_t[i] = exp_z[i] / sum([exp_z[j] for j in range(self.num_of_clusters) if z[j] - m >= -self.k])
 
             new_clusters[w_t.index(max(w_t))].append(article)
             all_w_t.append(w_t)
@@ -117,22 +158,38 @@ class EM:
         self.exp_z = all_exp_z
 
     def m_step(self) -> None:
+        """
+        Perform the m-step of the EM algorithm.
+        :return:
+        """
+
         self.compute_alpha()
         self.normalize_alpha()
         self.compute_p_ik()
 
     def likelihood_calc(self) -> None:
+        """
+        Calculate the likelihood of the model.
+        :return:
+        """
+
         self.likelihood: float = 0.0
         for i in range(self.num_of_articles):
             self.likelihood += self.m[i] + log(sum([e for e in self.exp_z[i] if e - self.m[i] >= -self.k]))
 
     def perplexity(self) -> float:
+        """
+        Calculate the perplexity of the model.
+        :return: the perplexity of the model.
+        """
+
         return exp((-self.likelihood / self.num_of_words))
 
 
 def to_png_file_name(y_label, plot_type):
     file_name = y_label.lower().replace(" ", "_")
     return f"{file_name}_{plot_type}.png"
+
 
 def save_plot(values, y_label):
     plt.figure(figsize=(10, 5))
@@ -144,6 +201,7 @@ def save_plot(values, y_label):
     plt.savefig(file_name)
     print(f"{y_label} plot image: {file_name}")
     plt.close()
+
 
 def save_histograms(topics, matrix_data, clusters_id_sorted, predictions):
     fig, axs = plt.subplots(5, 2, figsize=(20, 20))
@@ -165,6 +223,7 @@ def save_histograms(topics, matrix_data, clusters_id_sorted, predictions):
     print(f"Saved histogram image: {image_name}")
     plt.close(fig)
 
+
 def main():
     # parsing file
 
@@ -185,7 +244,7 @@ def main():
                     return 1
                 g1: str = match.group(1)
                 topics: list[str] = g1.split()
-                article_to_topics[article]= topics
+                article_to_topics[article] = topics
             elif mod == 2:
                 # article content line
                 words: list[str] = line.split(' ')[:-1]
@@ -228,7 +287,7 @@ def main():
 
         if all_likelihoods[-1] - last_likelihood < THRESHOLD:
             break
-        
+
         last_likelihood = all_likelihoods[-1]
 
     # create plots
@@ -250,7 +309,7 @@ def main():
 
     matrix_data = []
     n_rows = len(em.clusters)
-    n_cols = len(em.clusters) + 1  # +1 for cluster size 
+    n_cols = len(em.clusters) + 1  # +1 for cluster size
     for i in range(n_rows):
         matrix_data.append([0] * n_cols)
 
@@ -300,8 +359,10 @@ def main():
                 correct_assignments += 1
             total_assignments += 1
     if total_assignments:
-        print(f"Model's accuracy: {correct_assignments/total_assignments:.3f}")
+        print(f"Model's accuracy: {correct_assignments / total_assignments:.3f}")
+
 
 if __name__ == '__main__':
     import sys
+
     sys.exit(main())
