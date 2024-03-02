@@ -7,7 +7,7 @@ import pandas as pd
 import re
 
 EPSILON: float = 1e-6
-LIDSTONE_CONSTANT: float = 0.98
+LIDSTONE_CONSTANT: float = 1.19
 K: int = 10
 THRESHOLD: float = 1.0
 SECTION_NUM_LINES: int = 4
